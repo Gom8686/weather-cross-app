@@ -1,7 +1,10 @@
 // --- Main Application Logic ---
-// app.js version: v2.8 (2026-06-26)
-// 変更内容: 風速マップ(Windy)に選択地点のマーカー(ピン)を表示し、クリックでピンポイントの
-//          数値が確認できるようにした（色のグラデーションだけでは正確な値が分かりにくいため）
+// app.js version: v3.0 (2026-06-26)
+// 変更内容: LINE共有内容のレイアウトを変更。「天気/降水/風速」を1項目1行にし、ラベル幅
+//          （全角2文字で固定）を揃えることで、可変幅フォントの環境やスマホの狭い画面でも
+//          縦に揃って見えるようにした（半角スペースでの位置調整は環境によってズレるため）
+//          ※v2.9: LINE共有内容に「30分後」のデータも追加、ボタン文字を短縮
+//          ※v2.8: 風速マップ(Windy)に選択地点のマーカー表示を追加
 //          ※v2.7: 日付セレクターを各サイトの実際の表示範囲（約10日先）まで拡張
 //          ※v2.6: 「現在の天気」が日付セレクターの影響を受けるバグを修正
 //          ※v2.5: 「1時間後/3時間後/6時間後/12時間後」が日付セレクターの影響を受けるバグを修正
@@ -1133,6 +1136,9 @@ function shareViaLine() {
   const updateTime = document.getElementById("last-update-time").textContent.trim();
 
   // カードの現在の天気欄から表示中の値をそのまま読み取る（観測所注記などは除いた1行目のみ使用）
+  // ※LINEのトーク画面は環境によってフォントの幅が変わるため、半角スペースでの位置調整は揃わない。
+  //   「天気」「降水」「風速」は常に全角2文字なので、1項目1行にすればラベル幅が揃い、
+  //   スマホの狭い画面でも値の位置が縦に揃って見える。
   function getCardSummary(prefix, label) {
     const tempEl = document.getElementById(`${prefix}current-temp`);
     const descEl = document.getElementById(`${prefix}current-desc`);
@@ -1144,7 +1150,41 @@ function shareViaLine() {
       ? descEl.childNodes[0].textContent.trim()
       : descEl.textContent.trim();
 
-    return `■${label}\n${tempEl.textContent.trim()}　${desc}　降水${precipEl.textContent.trim()}　風速${windEl.textContent.trim()}`;
+    let text = `■${label}\n●現在　${tempEl.textContent.trim()}`;
+    text += `\n天気：${desc}`;
+    text += `\n降水：${precipEl.textContent.trim()}`;
+    text += `\n風速：${windEl.textContent.trim()}`;
+
+    // 30分後のタイムライン（一番上の行）も追加する
+    const half = getHalfHourSummary(sourceId(prefix));
+    if (half) {
+      text += `\n●30分後`;
+      text += `\n天気：${half.desc}`;
+      text += `\n降水：${half.precip}`;
+      text += `\n風速：${half.wind}`;
+    }
+
+    return text;
+  }
+
+  // prefix（"wn-"等）からsourceId（"weathernews"等）を逆引き
+  function sourceId(prefix) {
+    if (prefix === "wn-") return "weathernews";
+    if (prefix === "y-") return "yahoo";
+    return "tenki";
+  }
+
+  // タイムラインの一番上（30分後）の行から、天気・降水・風速をそれぞれ取得
+  function getHalfHourSummary(srcId) {
+    const firstItem = document.querySelector(`#card-${srcId} .forecast-timeline .timeline-item`);
+    if (!firstItem) return null;
+
+    const desc = firstItem.querySelector(".weather-desc")?.textContent?.trim() || "";
+    const precip = firstItem.querySelector(".precip")?.textContent?.trim() || "";
+    const wind = firstItem.querySelector(".wind")?.textContent?.trim() || "";
+    if (!desc && !precip && !wind) return null;
+
+    return { desc, precip, wind };
   }
 
   const lines = [
@@ -1216,7 +1256,7 @@ async function captureScreen() {
     console.error("キャプチャエラー:", err);
     showToast("画像の保存に失敗しました。", "error");
   } finally {
-    btn.innerHTML = '<i class="fa-solid fa-camera"></i> 画面を保存';
+    btn.innerHTML = '<i class="fa-solid fa-camera"></i> 画面保存';
     btn.disabled = false;
   }
 }
