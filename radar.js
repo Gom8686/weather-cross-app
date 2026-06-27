@@ -1,6 +1,9 @@
 // --- Radar Controller using Leaflet and JMA (気象庁) 高解像度降水ナウキャスト ---
-// radar.js version: v2.1 (2026-06-26)
-// 変更内容: 初期表示のズームレベルを10→12に変更（2段階拡大表示）
+// radar.js version: v2.2 (2026-06-26)
+// 変更内容: 30分後・1時間後の予報が見つからないことがあるバグを修正。実況(N1)の最新基準時刻と
+//          予報(N2)の更新タイミングがごくわずかにズレることがあり、突き合わせに失敗していたため、
+//          N2データ自身が持つ最新の基準時刻を信頼するよう変更（レースコンディション対策）
+//          ※v2.1: 初期表示のズームレベルを10→12に変更（2段階拡大表示）
 //          ※v2.0: 気象庁の実際のナウキャストAPI（jmatile/data/nowc）に全面修正
 //          （旧コードは存在しないURL（jmaradar/data/radar）を使っていたため常に表示されなかった）
 //          ナウキャストの予報範囲は60分先までのため「3時間後」は廃止し、現在/30分後/1時間後の3点に変更
@@ -141,15 +144,24 @@ class RadarManager {
         return new Date(y, mo, d, h, mi, s);
       };
 
-      const latestDate = parseJmaTime(latest.validtime);
+      // 予報データ（N2）自身が持つ最新の基準時刻を採用する。
+      // 実況（N1）の最新基準時刻と予報（N2）の更新タイミングがごくわずかにズレることがあり、
+      // N1の最新値で突き合わせると一致せず予報が見つからなくなることがあるため、
+      // N2データ自身の中で最新のbasetimeを信頼する。
+      let n2Basetime = null;
+      n2Data.forEach(e => {
+        if (!n2Basetime || e.basetime > n2Basetime) n2Basetime = e.basetime;
+      });
 
-      // 30分後・1時間後に最も近い予報を、同じbasetimeの予報一覧（n2Data）から探す
+      // 30分後・1時間後に最も近い予報を、N2自身の最新基準時刻のグループから探す
       const findClosestForecast = (offsetMinutes) => {
-        const targetDate = new Date(latestDate.getTime() + offsetMinutes * 60000);
+        if (!n2Basetime) return null;
+        const baseDate = parseJmaTime(n2Basetime);
+        const targetDate = new Date(baseDate.getTime() + offsetMinutes * 60000);
         let closest = null;
         let minDiff = Infinity;
         n2Data.forEach(entry => {
-          if (entry.basetime !== latest.basetime) return; // 同じ基準時刻の予報のみ対象
+          if (entry.basetime !== n2Basetime) return; // 同じ基準時刻の予報のみ対象
           const vDate = parseJmaTime(entry.validtime);
           const diff = Math.abs(vDate - targetDate);
           if (diff < minDiff) {
