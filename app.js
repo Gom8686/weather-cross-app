@@ -1,6 +1,8 @@
 // --- Main Application Logic ---
-// app.js version: v3.2 (2026-06-26)
-// 変更内容: fetchJmaWarningsで a.area が存在しない要素があるとクラッシュするバグを修正
+// app.js version: v3.4 (2026-06-26)
+// 変更内容: 画面保存時のファイル名に時刻（時分秒）も追加。あわせてUTC基準のtoISOString()ではなく
+//          ローカル時間（日本時間）から日付・時刻を組み立てる方式に変更（日付のズレを防止）
+//          ※v3.3: 履歴から選択した際に都道府県・市区町村セレクトにも該当地域を反映
 //          （try/catchで握りつぶされ画面自体は壊れていなかったが、コンソールにエラーが出ていた）
 //          ※v3.1: 「指定」行のラベル（日付付きの場合）がアイコンと重なるバグを修正。
 //          「指定」と「月日 時刻」の間に改行を入れ、2行で表示できるようにした（style.css側も対応）
@@ -28,6 +30,7 @@
 let radarManager = null;
 let currentLatLng = [35.6895, 139.6917]; // 初期値：東京
 let currentJisCode = "13101"; // 千代田区
+let currentCityCode = "13101000"; // 市区町村の元コード（class20s、7桁。city-selectの値と一致させるため）
 let currentPrefCode = "130000"; // 東京都
 let currentPrefEng = "tokyo";
 let currentSearchKeyword = "100-0001";
@@ -189,6 +192,7 @@ function addCurrentLocationToHistory() {
     lat: currentLatLng[0],
     lng: currentLatLng[1],
     jisCode: currentJisCode,
+    cityCode: currentCityCode,
     prefCode: currentPrefCode,
     prefEng: currentPrefEng,
     searchKeyword: currentSearchKeyword,
@@ -243,17 +247,32 @@ function handleHistorySelect(e) {
   currentPlaceName = entry.placeName;
   currentSearchKeyword = entry.searchKeyword;
   currentJisCode = entry.jisCode;
+  currentCityCode = entry.cityCode || "";
   currentPrefCode = entry.prefCode;
   currentPrefEng = entry.prefEng;
   isFallbackLocation = !!entry.isFallback;
 
   document.getElementById("current-location-name").innerHTML = `<i class="fa-solid fa-street-view"></i> ${currentPlaceName}`;
 
-  // 都道府県・市区町村セレクトは未選択状態に戻す（履歴経由での選択のため）
-  document.getElementById("pref-select").value = "";
+  // 都道府県・市区町村セレクトにも同じ地域を反映する
+  const prefSelect = document.getElementById("pref-select");
   const citySelect = document.getElementById("city-select");
   citySelect.innerHTML = '<option value="">市区町村を選択</option>';
   citySelect.disabled = true;
+
+  if (!isFallbackLocation && currentCityCode) {
+    // 都道府県セレクトに該当の都道府県があれば選択し、市区町村セレクトを構築・選択する
+    const prefOptionExists = Array.from(prefSelect.options).some(o => o.value === currentPrefCode);
+    if (prefOptionExists) {
+      prefSelect.value = currentPrefCode;
+      if (populateCitySelectForPref(currentPrefCode)) {
+        citySelect.value = currentCityCode;
+      }
+    }
+  } else {
+    // フォールバックモードの履歴、または市区町村コードが無い場合は未選択のままにする
+    prefSelect.value = "";
+  }
 
   locationSelected = true;
 
@@ -364,6 +383,7 @@ function handlePrefSelect(e) {
     currentSearchKeyword = data.name;
     const wnParts = data.weathernews.split('/');
     currentJisCode = wnParts[wnParts.length - 2] || "13101";
+    currentCityCode = ""; // フォールバックモードでは市区町村単位のコードを持たない
     currentPrefEng = wnParts[wnParts.length - 3] || "tokyo";
     currentPrefCode = currentJisCode.substring(0, 2) + "0000";
     document.getElementById("current-location-name").innerHTML = `<i class="fa-solid fa-street-view"></i> ${currentPlaceName}`;
@@ -375,7 +395,13 @@ function handlePrefSelect(e) {
     return;
   }
 
-  // 気象庁データモードから市区町村のセレクトボックスをロード
+  // 気象庁データモードから市区町村のセレクトボックスを構築
+  populateCitySelectForPref(prefCode);
+}
+
+// --- 指定した都道府県コードに対応する市区町村セレクトの選択肢を構築 ---
+function populateCitySelectForPref(prefCode) {
+  const citySelect = document.getElementById("city-select");
   const cities = jmaCitiesMap[prefCode];
   if (cities && cities.length > 0) {
     cities.forEach(c => {
@@ -385,7 +411,9 @@ function handlePrefSelect(e) {
       citySelect.appendChild(opt);
     });
     citySelect.disabled = false;
+    return true;
   }
+  return false;
 }
 
 // --- 市区町村選択時のハンドラ ---
@@ -421,6 +449,7 @@ async function handleCitySelect(e) {
     
     // JISコードは気象庁コード（7桁）の上5桁
     currentJisCode = cityCode.substring(0, 5);
+    currentCityCode = cityCode; // 市区町村セレクトの値（7桁）をそのまま保持（履歴復元時に使用）
     currentPrefCode = cityCode.substring(0, 2) + "0000";
     currentPrefEng = getPrefEnglishName(prefName);
 
@@ -1249,7 +1278,12 @@ async function captureScreen() {
     // 画像ダウンロード
     const link = document.createElement("a");
     const safePlace = currentPlaceName.replace(/[\s\(\)]/g, "_");
-    link.download = `weather_comparison_${safePlace}_${new Date().toISOString().slice(0,10)}.png`;
+    // ファイル名に日付＋時刻（ローカル時間）を含める。toISOString()はUTC基準になるため、
+    // ローカル時間の年月日時分秒から自前で組み立てる
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const dateTimeStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    link.download = `weather_comparison_${safePlace}_${dateTimeStr}.png`;
     link.href = canvas.toDataURL("image/png");
     link.click();
 
