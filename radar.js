@@ -1,6 +1,9 @@
 // --- Radar Controller using Leaflet and JMA (気象庁) 高解像度降水ナウキャスト ---
-// radar.js version: v2.3 (2026-06-26)
-// 変更内容: 背景マップを暗いテーマ(dark_all)から薄いテーマ(light_all)に変更し、降水ナウキャストの
+// radar.js version: v2.4 (2026-06-27)
+// 変更内容: 地名・境界線が降水の色に埋もれて見えなくなる問題を修正。専用のpane（層）を作成し、
+//          地名・境界線だけの透明レイヤー(light_only_labels)を降水タイルより確実に上に固定表示。
+//          現在地ピンより下になるようz-indexを調整済み（ピンが文字に隠れないように）。
+//          ※v2.3: 背景マップを暗いテーマ(dark_all)から薄いテーマ(light_all)に変更し、降水ナウキャストの
 //          薄い雨が暗い背景に埋もれて見えなくなる問題を解消。雨雲レイヤーの透明度も0.65→0.85に。
 //          また「表示時刻」がUTC基準のまま表示され日本時間と9時間ズレていたバグを修正
 //          （Date.UTC()で明示的にUTCとして解釈し、ブラウザのローカル時刻＝日本時間に変換）
@@ -99,6 +102,19 @@ class RadarManager {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       subdomains: 'abcd',
       maxZoom: 20
+    }).addTo(this.map);
+
+    // 地名・境界線だけの透明レイヤー（道路や地図の色は無く、文字とラインのみ）を、
+    // 専用のpane（層）を作って降水レイヤーより確実に上に固定する。
+    // これが無いと、降水の色（特に濃い青）に地名が埋もれて見えなくなってしまう。
+    this.map.createPane('labelsPane');
+    this.map.getPane('labelsPane').style.zIndex = 300; // 降水タイル(tilePane=200)より上、現在地ピン(markerPane=600)より下
+    this.map.getPane('labelsPane').style.pointerEvents = 'none'; // クリック操作は地図本体に通す
+
+    this.labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+      subdomains: 'abcd',
+      maxZoom: 20,
+      pane: 'labelsPane'
     }).addTo(this.map);
   }
 

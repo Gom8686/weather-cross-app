@@ -1,6 +1,14 @@
 // --- Main Application Logic ---
-// app.js version: v3.6 (2026-06-26)
-// 変更内容: 重大バグ修正。注意報・警報のエリア判定が、存在しない構造(a.area.name)を見ていたため
+// app.js version: v3.7 (2026-06-27)
+// 変更内容: 重大バグ修正。注意報・警報の取得元エンドポイント(/data/warning/{code}.json)が、
+//          気象庁の2026年5月29日のシステム移行を境に更新が完全に止まっていた（実際に検証した
+//          ところ約1か月前の古いデータが返ってきたままだった）。新しいエンドポイント
+//          (/data/r8/{code}.json)に全面切替。新形式は「大雨」「土砂災害」「強風」「波浪」等の
+//          複数のデータセットが配列でまとまっているため全て走査し、①通常の注意報・警報
+//          （既存のコード対応表で名称化）と②警戒レベル相当情報（土砂災害等の危険度分布。
+//          気象庁が用意した文章をそのまま表示）の両方を取得するように変更。これにより
+//          「土砂災害警報（警戒レベル3/4相当）」のような情報も表示されるようになった。
+//          ※v3.6: 重大バグ修正。注意報・警報のエリア判定が、存在しない構造(a.area.name)を見ていたため
 //          常に一致に失敗し、「無関係な先頭エリア」の警報を誤って表示してしまっていた
 //          （実際とは全く違う地域の警報が出る不具合）。気象庁の公式リファレンス実装に基づき、
 //          市区町村コード(a.code)による完全一致に変更。一致しない場合は何も表示しない（安全側）。
@@ -741,41 +749,55 @@ const WARNING_CODE_NAMES = {
 
 async function fetchJmaWarnings(prefCode, cityCode) {
   try {
-    // 例: 東京都(130000)の警告データ
-    // 気象庁の警告JSONはCORS制限がないため直接取得可能
-    const res = await fetch(`https://www.jma.go.jp/bosai/warning/data/warning/${prefCode}.json`);
+    if (!cityCode) return [];
+
+    // ※2026年5月29日に気象庁がデータ形式を変更したため、旧エンドポイント
+    //   (/data/warning/{code}.json) は新しいデータが流れてこなくなっている
+    //   （実際に検証した際、1か月前の古いデータが返ってきたままだった）。
+    //   新形式(/data/r8/{code}.json)は「大雨」「土砂災害」「強風」「波浪」等の
+    //   複数のデータセットが配列でまとめて入っている構造のため、すべてを走査する。
+    const res = await fetch(`https://www.jma.go.jp/bosai/warning/data/r8/${prefCode}.json`);
     if (!res.ok) return [];
-    
-    const data = await res.json();
+
+    const datasets = await res.json();
+    if (!Array.isArray(datasets)) return [];
+
     const warnings = [];
+    const seen = new Set();
 
-    // JSON構造をパースして注意報・警報を抽出する
-    // ※気象庁の公式リファレンス実装に基づき、各エリアは a.code に市区町村コード（7桁）が
-    //   直接入っている。以前は a.area.name との文字列一致を試みていたが、そのような構造は
-    //   存在せず常に一致に失敗し、結果的に「先頭のエリア」(=無関係な地域)へ
-    //   誤ってフォールバックしてしまっていた（実際とは異なる地域の警報が出る不具合の原因）。
-    if (data.areaTypes && data.areaTypes[1] && cityCode) {
-      const areas = data.areaTypes[1].areas;
-      const targetArea = areas.find(a => String(a.code) === String(cityCode));
+    datasets.forEach(dataset => {
+      const items = dataset?.warning?.class20Items;
+      if (!Array.isArray(items)) return;
 
-      // 一致するエリアが見つからない場合は「該当データなし」として扱う
-      // （無関係な地域の警報を誤って表示するより、何も表示しない方が安全）
-      if (targetArea && targetArea.warnings) {
-        targetArea.warnings.forEach(w => {
-          if (w.status === "解除" || w.status === "発表なし") return;
-          if (w.code === undefined || w.code === null) return;
+      // 新形式では市区町村コードは a.areaCode に入っている（旧形式の a.code とは項目名が異なる）
+      const area = items.find(a => String(a.areaCode) === String(cityCode));
+      if (!area) return;
 
-          // コードは "03" のように2桁の場合と、3のように数値（先頭0なし）の場合があるため
-          // 文字列化してpadStart(2,'0')で2桁に揃えてから対応表を参照する
-          const codeStr = String(w.code).padStart(2, "0");
-          const name = WARNING_CODE_NAMES[codeStr] || `警報(コード${codeStr})`;
-          // 「特別警報」「警報」は赤系、「注意報」は橙系で表示する
-          const level = name.includes("警報") ? "warning" : "advisory";
-
-          warnings.push({ name, level });
+      // ① 通常の注意報・警報（強風注意報・波浪注意報・雷注意報など）
+      //   kindsの中にcodeが無い場合は「警報・注意報はなし」を意味するため除外する
+      if (Array.isArray(area.kinds)) {
+        area.kinds.forEach(k => {
+          if (!k.code || k.status === "解除") return;
+          const codeStr = String(k.code).padStart(2, "0");
+          const name = WARNING_CODE_NAMES[codeStr];
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          warnings.push({ name, level: name.includes("警報") ? "warning" : "advisory" });
         });
       }
-    }
+
+      // ② 警戒レベル相当情報（大雨・土砂災害・浸水等の危険度分布）
+      //   こちらは独自のコード体系のため対応表は使わず、気象庁が用意した文章をそのまま表示する
+      //   例:「27日14時から28日0時まで、警戒レベル4相当」
+      if (area.criteriaPeriod && Array.isArray(area.criteriaPeriod.locals)) {
+        area.criteriaPeriod.locals.forEach(local => {
+          if (!local.sentence || seen.has(local.sentence)) return;
+          seen.add(local.sentence);
+          warnings.push({ name: local.sentence, level: "warning" });
+        });
+      }
+    });
+
     return warnings;
   } catch (err) {
     console.warn("警告データの取得失敗:", err);
