@@ -1,6 +1,8 @@
 // --- Main Application Logic ---
-// app.js version: v3.1 (2026-06-26)
-// 変更内容: 「指定」行のラベル（日付付きの場合）がアイコンと重なるバグを修正。
+// app.js version: v3.2 (2026-06-26)
+// 変更内容: fetchJmaWarningsで a.area が存在しない要素があるとクラッシュするバグを修正
+//          （try/catchで握りつぶされ画面自体は壊れていなかったが、コンソールにエラーが出ていた）
+//          ※v3.1: 「指定」行のラベル（日付付きの場合）がアイコンと重なるバグを修正。
 //          「指定」と「月日 時刻」の間に改行を入れ、2行で表示できるようにした（style.css側も対応）
 //          ※v3.0: LINE共有内容のレイアウトを「天気/降水/風速」1項目1行・ラベル幅固定に変更
 //          ※v2.9: LINE共有内容に「30分後」のデータも追加、ボタン文字を短縮
@@ -697,7 +699,7 @@ async function fetchJmaWarnings(prefCode) {
     if (data.areaTypes && data.areaTypes[1]) {
       const areas = data.areaTypes[1].areas;
       // 検索中の地域名を含むエリアを探す
-      let targetArea = areas.find(a => currentPlaceName.includes(a.area.name));
+      let targetArea = areas.find(a => a.area && currentPlaceName.includes(a.area.name));
       if (!targetArea) targetArea = areas[0]; // なければ最初の地域
 
       if (targetArea && targetArea.warnings) {
