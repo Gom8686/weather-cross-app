@@ -1,4 +1,4 @@
-/* style.css version: v1.4 (2026-06-27) 変更内容: 降水ナウキャストタイル画像に彩度・コントラストを上げるフィルターを追加(最も弱い降水が白い背景地図に埋もれる問題を解消) */
+/* style.css version: v1.5 (2026-06-27) 変更内容: 降水タイルのフィルターをさらに強化(縁取り効果追加)、背景地図もわずかに暗くして1mm帯の有無を判別しやすく */
 /* --- Design System & CSS Variables --- */
 :root {
   --bg-color: #080b11;
@@ -771,12 +771,21 @@ h1, h2, h3, h4 {
   background: #0d121d !important;
 }
 
-/* 気象庁の降水ナウキャストタイル画像にのみ、彩度・コントラストを上げるフィルターをかける。
+/* 気象庁の降水ナウキャストタイル画像にのみ、彩度・コントラストを大きく上げるフィルターをかける。
    最も弱い降水（1mm/h未満）の色は元データがほぼ白に近く、薄い背景地図(light_all)と
    同化して見えなくなってしまうため、降水タイル画像（URLに"jmatile"を含む）だけを
-   対象に画像を強調する。背景地図やラベルレイヤーには影響しない。 */
+   対象に強く強調する。drop-shadowで降水域の境界に縁取りを作り、「降水ゼロ」との
+   境目（1mm帯の有無）が分かるようにしている。背景地図やラベルレイヤーには影響しない。 */
 #radar-map img[src*="jmatile"] {
-  filter: saturate(2.2) contrast(1.5) brightness(0.93);
+  filter: saturate(4) contrast(1.9) brightness(0.88)
+          drop-shadow(0 0 1.5px rgba(0, 60, 130, 0.9))
+          drop-shadow(0 0 2.5px rgba(0, 60, 130, 0.6));
+}
+
+/* 背景地図（CARTO light_all）をわずかに暗くし、降水ゼロの領域が完全な白にならないようにする。
+   これにより、ごく薄い降水（1mm帯）でもコントラストで判別しやすくなる。 */
+#radar-map img[src*="basemaps.cartocdn.com/light_all"] {
+  filter: brightness(0.93);
 }
 
 /* Radar Controls */
