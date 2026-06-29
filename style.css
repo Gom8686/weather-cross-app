@@ -1,4 +1,4 @@
-/* style.css version: v1.3 (2026-06-26) 変更内容: 気象庁公式リンク(warnings-official-link)のスタイルを追加 */
+/* style.css version: v1.4 (2026-06-27) 変更内容: 降水ナウキャストタイル画像に彩度・コントラストを上げるフィルターを追加(最も弱い降水が白い背景地図に埋もれる問題を解消) */
 /* --- Design System & CSS Variables --- */
 :root {
   --bg-color: #080b11;
@@ -769,6 +769,14 @@ h1, h2, h3, h4 {
 /* Leaflet Dark Theme Override */
 .leaflet-container {
   background: #0d121d !important;
+}
+
+/* 気象庁の降水ナウキャストタイル画像にのみ、彩度・コントラストを上げるフィルターをかける。
+   最も弱い降水（1mm/h未満）の色は元データがほぼ白に近く、薄い背景地図(light_all)と
+   同化して見えなくなってしまうため、降水タイル画像（URLに"jmatile"を含む）だけを
+   対象に画像を強調する。背景地図やラベルレイヤーには影響しない。 */
+#radar-map img[src*="jmatile"] {
+  filter: saturate(2.2) contrast(1.5) brightness(0.93);
 }
 
 /* Radar Controls */
