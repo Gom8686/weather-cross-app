@@ -1,4 +1,4 @@
-/* style.css version: v1.9 (2026-06-28) 変更内容: 場所名横の日付(.location-date)スタイルを追加 */
+/* style.css version: v2.0 (2026-06-28) 変更内容: data-timeをmargin-left:autoで右寄せ(リンクボタン左)に変更 */
 /* --- Design System & CSS Variables --- */
 :root {
   --bg-color: #080b11;
@@ -361,7 +361,8 @@ h1, h2, h3, h4 {
   padding: 0 0.5rem;
 }
 
-/* 各カードのタイトル横に出る「○○:○○現在」の小さなラベル */
+/* 各カードのタイトル横に出る「○○:○○現在」の小さなラベル
+   card-header内でsource-infoとsource-linkの間に配置し、margin-left:autoで右寄せにする */
 .data-time {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -370,8 +371,10 @@ h1, h2, h3, h4 {
   padding: 0.1rem 0.4rem;
   background: rgba(255,255,255,0.05);
   border-radius: 4px;
-  margin-left: 0.4rem;
+  margin-left: auto;  /* 右端のリンクボタンのすぐ左に寄せる */
+  margin-right: 0.4rem;
   flex-shrink: 0;
+  align-self: center;
 }
 
 .location-indicator h2 {
