@@ -1,13 +1,12 @@
 // --- Main Application Logic ---
-// app.js version: v3.9 (2026-06-28)
+// app.js version: v4.0 (2026-06-28)
 // 変更内容:
-//   ①「取得時間 hh:mm:ss」表示を「更新:hh:mm」に変更し、lastFetchTime変数で管理
-//   ②画面保存の画像オーバーレイをlastFetchTime（データ取得時刻）ベースに変更
-//     左上に「場所名 (MM/DD)」、右上に「更新:hh:mm」を表示
-//   ③更新ボタン押下時の日付セレクターバグ修正。「5日後10:00」など具体的な将来日時が
-//     選択されている場合、その日時を過ぎるまで選択を保持する（adjustDateSelectOnRefresh）
-//     「次の4時」が選ばれている場合のみ、日またぎに合わせて自動的に更新する
-//   ※v3.8: 画面保存に時刻オーバーレイ・注意報必須化・ダウンロード確認ボタン追加
+//   ①画面保存: location-indicatorをcapture-target内に組み込み、場所名・更新時間が
+//     画像に含まれるよう修正（index.html v2.1、style.css v1.6も変更）
+//   ②各カードタイトル横に「hh:mm現在」の発表時間ラベルを追加
+//     WN=現在の正時、Yahoo!=直前の3時間区切り、tenki.jp=アメダス最新観測時刻
+//   ③LINEボタン: PCでもコピー後にLINEを起動する（line.me/R/share を開く）
+//   ※v3.9: 取得時間→「更新:hh:mm」変更、日付セレクターバグ修正(adjustDateSelectOnRefresh)
 //          気象庁の2026年5月29日のシステム移行を境に更新が完全に止まっていた（実際に検証した
 //          ところ約1か月前の古いデータが返ってきたままだった）。新しいエンドポイント
 //          (/data/r8/{code}.json)に全面切替。新形式は「大雨」「土砂災害」「強風」「波浪」等の
@@ -627,16 +626,46 @@ async function fetchWeatherData(isRefresh = false) {
     const tenkiData = await fetchTenkiCurrentData(currentLatLng[0], currentLatLng[1]);
 
     // 5. UIの描画
-    // 各サイト用のカードにデータを反映する
-    // 実データが取得できていればそれを使用し、失敗していればOpen-Meteoのデータで補正して描画する
     renderSourceCard("weathernews", null, baseWeatherData, warnings, dateOffset, targetTime);
     renderSourceCard("yahoo", yahooData, baseWeatherData, warnings, dateOffset, targetTime);
     renderSourceCard("tenki", tenkiData, baseWeatherData, warnings, dateOffset, targetTime);
 
-    // 取得日時の更新（lastFetchTimeに保存し、画像保存時のオーバーレイにも使用する）
+    // 6. 各カードの「発表時間」ラベルを更新する
+    // ウェザーニュース: Open-Meteoの予報は1時間ごとの刻みのため、現在の「正時(hh:00)」として表示
+    // Yahoo!天気:      スクレイピングで拾った3時間刻みの時刻列を採用しているため、
+    //                  直前の3時間区切り時刻（例: 14:00現在→「12:00現在」）を表示
+    // tenki.jp:        アメダスの最新観測時刻はtenkiDataに含まれているため、それを使う
     const now = new Date();
-    lastFetchTime = now;
     const pad = (n) => String(n).padStart(2, "0");
+
+    // WN: 現在の正時
+    const wnTimeEl = document.getElementById("wn-data-time");
+    if (wnTimeEl) {
+      wnTimeEl.textContent = `${pad(now.getHours())}:00現在`;
+    }
+
+    // Yahoo!: 直前の3時間区切り（0,3,6,9,12,15,18,21時）
+    const yTimeEl = document.getElementById("y-data-time");
+    if (yTimeEl) {
+      const yahooHour = Math.floor(now.getHours() / 3) * 3;
+      yTimeEl.textContent = yahooData?.scraped
+        ? `${pad(yahooHour)}:00現在`
+        : `${pad(now.getHours())}:00現在(推定)`;
+    }
+
+    // tenki.jp(アメダス): tenkiDataのobsTimeがあればそれを使う、なければ直前10分刻み
+    const tTimeEl = document.getElementById("t-data-time");
+    if (tTimeEl) {
+      if (tenkiData?.obsTime) {
+        tTimeEl.textContent = `${tenkiData.obsTime}現在`;
+      } else {
+        const amedasMin = Math.floor(now.getMinutes() / 10) * 10;
+        tTimeEl.textContent = `${pad(now.getHours())}:${pad(amedasMin)}現在`;
+      }
+    }
+
+    // 取得日時の更新（lastFetchTimeに保存し、画像保存時のオーバーレイにも使用する）
+    lastFetchTime = now;
     document.getElementById("last-update-time").textContent = `更新:${pad(now.getHours())}:${pad(now.getMinutes())}`;
     showToast("天気情報を更新しました");
 
@@ -1074,9 +1103,16 @@ async function fetchTenkiCurrentData(lat, lng) {
 
     if (temp === null && wind === null && precip === null) return null;
 
+    // obsTime: アメダス最新観測時刻を「hh:mm」形式で返す
+    // tenki.jpカードのタイトル横に「hh:mm現在」として表示するために返す
+    const obsTimeStr = latestDate instanceof Date && !isNaN(latestDate)
+      ? `${String(latestDate.getHours()).padStart(2,"0")}:${String(latestDate.getMinutes()).padStart(2,"0")}`
+      : null;
+
     return {
       current: { temp, wind, precip },
       stationName: stations[stationId]?.kjName || "",
+      obsTime: obsTimeStr,
       scraped: true
     };
   } catch (e) {
@@ -1353,26 +1389,33 @@ function shareViaLine() {
 
   const shareText = lines.join("\n");
 
-  // スマホ・タブレット（iOS/Android）かどうかを判定
+  // デバイス判定（iOS/Android/タブレット）
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const lineUrl = `https://line.me/R/share?text=${encodeURIComponent(shareText)}`;
 
   if (isMobile) {
-    // スマホ・タブレットではLINEアプリがインストールされていればそのまま起動する
-    const lineUrl = `https://line.me/R/share?text=${encodeURIComponent(shareText)}`;
+    // スマホ・タブレット: LINEアプリを直接起動して共有テキストを渡す
     window.open(lineUrl, "_blank");
   } else {
-    // PCではLINEアプリ・Webページを開かず、クリップボードへのコピーのみ行う
-    // （LINE公式の仕様上、PC版LINEはWebからの直接起動に対応していないため）
+    // PCでも: クリップボードにコピーした上で、LINEを起動する試み
+    // （PC版LINEのURLスキームが非公式のため確実ではないが、一部の環境では起動可能）
+    const copyAndOpen = () => {
+      window.open(lineUrl, "_blank");
+    };
+
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(shareText)
         .then(() => {
           showToast("天気データをコピーしました。LINEアプリに貼り付けて送信してください");
+          copyAndOpen();
         })
         .catch(() => {
           showToast("コピーに失敗しました", "error");
+          copyAndOpen();
         });
     } else {
       showToast("このブラウザではコピー機能が使えません", "error");
+      copyAndOpen();
     }
   }
 }

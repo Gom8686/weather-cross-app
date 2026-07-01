@@ -99,20 +99,22 @@
       </div>
     </section>
 
-    <!-- Location Indicator -->
-    <div class="location-indicator">
-      <h2 id="current-location-name"><i class="fa-solid fa-street-view"></i> 東京都千代田区</h2>
-      <span class="last-update" id="last-update-time">取得時間: 未取得</span>
-    </div>
-
-    <!-- Main Comparison Grid -->
+    <!-- Main Comparison Grid (location-indicatorもここに含め、画面保存でキャプチャ対象にする) -->
     <main class="comparison-grid" id="capture-target">
+
+      <!-- Location Indicator (capture-target内に移動) -->
+      <div class="location-indicator location-indicator--in-grid">
+        <h2 id="current-location-name"><i class="fa-solid fa-street-view"></i> 東京都千代田区</h2>
+        <span class="last-update" id="last-update-time">更新:--:--</span>
+      </div>
+
       <!-- Weathernews Card -->
       <article class="weather-card glass" id="card-weathernews">
         <div class="card-header wn-theme">
           <div class="source-info">
             <span class="source-badge">Weathernews</span>
             <h3>ウェザーニュース</h3>
+            <span class="data-time" id="wn-data-time"></span>
           </div>
           <a href="https://weathernews.jp/" target="_blank" class="source-link" id="link-weathernews" title="公式サイトを開く">
             <i class="fa-solid fa-up-right-from-square"></i>
@@ -158,6 +160,7 @@
           <div class="source-info">
             <span class="source-badge">Yahoo! 天気</span>
             <h3>Yahoo! 天気</h3>
+            <span class="data-time" id="y-data-time"></span>
           </div>
           <a href="https://weather.yahoo.co.jp/weather/" target="_blank" class="source-link" id="link-yahoo" title="公式サイトを開く">
             <i class="fa-solid fa-up-right-from-square"></i>
@@ -203,6 +206,7 @@
           <div class="source-info">
             <span class="source-badge">tenki.jp</span>
             <h3>日本気象協会</h3>
+            <span class="data-time" id="t-data-time"></span>
           </div>
           <a href="https://tenki.jp/" target="_blank" class="source-link" id="link-tenki" title="公式サイトを開く">
             <i class="fa-solid fa-up-right-from-square"></i>
