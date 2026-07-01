@@ -1,9 +1,8 @@
 // --- Main Application Logic ---
-// app.js version: v4.1 (2026-06-28)
-// 変更内容: 画面保存のレイアウト崩れを修正。location-indicatorをmainの外(元の位置)に戻し、
-//          captureScreen側でlocation-indicator+main+footerの3要素を個別にhtml2canvasで
-//          キャプチャして1枚のCanvasに縦合成する方式に変更。右上に「更新:hh:mm」オーバーレイ付き。
-//          ※v4.0: 各カード発表時間表示、LINEボタンPC版もLINE起動、capture-targetにlocation含む
+// app.js version: v4.2 (2026-06-28)
+// 変更内容: ①場所名の横に当日日付(MM/DD)を薄い文字で表示するよう変更(updateLocationDisplay関数で一元管理)
+//          ②画面保存のファイル名を「weather_comparison_」→「CROSS_WEATHER_」に変更
+//          ※v4.1: 画面保存のレイアウト崩れを修正(location-indicator+main+footerを縦合成)
 //          気象庁の2026年5月29日のシステム移行を境に更新が完全に止まっていた（実際に検証した
 //          ところ約1か月前の古いデータが返ってきたままだった）。新しいエンドポイント
 //          (/data/r8/{code}.json)に全面切替。新形式は「大雨」「土砂災害」「強風」「波浪」等の
@@ -196,6 +195,16 @@ function adjustDateSelectOnRefresh() {
   // まだ未来の場合は何もしない（選択を保持）
 }
 
+// --- 場所名に当日の日付(MM/DD)を付けて表示するヘルパー ---
+// 「千葉県いすみ市  06/28」のように、場所名の右横に薄い文字で今日の日付を表示する
+function updateLocationDisplay(placeName) {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  const dateStr = `${pad(now.getMonth() + 1)}/${pad(now.getDate())}`;
+  document.getElementById("current-location-name").innerHTML =
+    `<i class="fa-solid fa-street-view"></i> ${placeName}<span class="location-date">${dateStr}</span>`;
+}
+
 // --- 地域未選択時の待機表示 ---
 function showLocationPrompt() {
   document.getElementById("current-location-name").innerHTML =
@@ -319,7 +328,7 @@ function handleHistorySelect(e) {
   currentPrefEng = entry.prefEng;
   isFallbackLocation = !!entry.isFallback;
 
-  document.getElementById("current-location-name").innerHTML = `<i class="fa-solid fa-street-view"></i> ${currentPlaceName}`;
+  updateLocationDisplay(currentPlaceName);
 
   // 都道府県・市区町村セレクトにも同じ地域を反映する
   const prefSelect = document.getElementById("pref-select");
@@ -453,7 +462,7 @@ function handlePrefSelect(e) {
     currentCityCode = ""; // フォールバックモードでは市区町村単位のコードを持たない
     currentPrefEng = wnParts[wnParts.length - 3] || "tokyo";
     currentPrefCode = currentJisCode.substring(0, 2) + "0000";
-    document.getElementById("current-location-name").innerHTML = `<i class="fa-solid fa-street-view"></i> ${currentPlaceName}`;
+    updateLocationDisplay(currentPlaceName);
     document.getElementById("history-select").value = "";
     locationSelected = true;
     isFallbackLocation = true;
@@ -520,7 +529,7 @@ async function handleCitySelect(e) {
     currentPrefCode = cityCode.substring(0, 2) + "0000";
     currentPrefEng = getPrefEnglishName(prefName);
 
-    document.getElementById("current-location-name").innerHTML = `<i class="fa-solid fa-street-view"></i> ${currentPlaceName}`;
+    updateLocationDisplay(currentPlaceName);
     document.getElementById("history-select").value = "";
 
     locationSelected = true;
@@ -1488,7 +1497,7 @@ async function captureScreen() {
     const link = document.createElement("a");
     const safePlace = currentPlaceName.replace(/[\s\(\)]/g, "_");
     const dateTimeStr = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const fileName = `weather_comparison_${safePlace}_${dateTimeStr}.png`;
+    const fileName = `CROSS_WEATHER_${safePlace}_${dateTimeStr}.png`;
     link.download = fileName;
     link.href = combined.toDataURL("image/png");
     link.click();
