@@ -103,14 +103,12 @@ h1, h2, h3, h4 {
   white-space: nowrap;
 }
 
-/* フッター (capture-target内・印刷時にも表示)
-   農薬配布計算ツールに合わせた暗い帯スタイル。
-   画面保存・印刷に含まれるのはこの1行のみ。 */
+/* フッター (画面保存・印刷に含めるため capture-footer として独立配置)
+   農薬配布計算ツールに合わせた暗い帯スタイル。 */
 .app-footer {
-  grid-column: 1 / -1;
   background: rgba(0, 0, 0, 0.55);
   border-top: 1px solid rgba(0, 240, 255, 0.15);
-  margin-top: 1rem;
+  margin-top: 0.5rem;
   padding: 0.55rem 1.2rem;
   display: flex;
   justify-content: flex-end;
@@ -361,12 +359,6 @@ h1, h2, h3, h4 {
   align-items: center;
   margin-bottom: 1.5rem;
   padding: 0 0.5rem;
-}
-
-/* capture-target内に移動した際、3カラムグリッドをまたいで全幅で表示するための指定 */
-.location-indicator--in-grid {
-  grid-column: 1 / -1;
-  margin-bottom: 0.5rem;
 }
 
 /* 各カードのタイトル横に出る「○○:○○現在」の小さなラベル */

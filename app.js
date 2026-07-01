@@ -1,12 +1,9 @@
 // --- Main Application Logic ---
-// app.js version: v4.0 (2026-06-28)
-// 変更内容:
-//   ①画面保存: location-indicatorをcapture-target内に組み込み、場所名・更新時間が
-//     画像に含まれるよう修正（index.html v2.1、style.css v1.6も変更）
-//   ②各カードタイトル横に「hh:mm現在」の発表時間ラベルを追加
-//     WN=現在の正時、Yahoo!=直前の3時間区切り、tenki.jp=アメダス最新観測時刻
-//   ③LINEボタン: PCでもコピー後にLINEを起動する（line.me/R/share を開く）
-//   ※v3.9: 取得時間→「更新:hh:mm」変更、日付セレクターバグ修正(adjustDateSelectOnRefresh)
+// app.js version: v4.1 (2026-06-28)
+// 変更内容: 画面保存のレイアウト崩れを修正。location-indicatorをmainの外(元の位置)に戻し、
+//          captureScreen側でlocation-indicator+main+footerの3要素を個別にhtml2canvasで
+//          キャプチャして1枚のCanvasに縦合成する方式に変更。右上に「更新:hh:mm」オーバーレイ付き。
+//          ※v4.0: 各カード発表時間表示、LINEボタンPC版もLINE起動、capture-targetにlocation含む
 //          気象庁の2026年5月29日のシステム移行を境に更新が完全に止まっていた（実際に検証した
 //          ところ約1か月前の古いデータが返ってきたままだった）。新しいエンドポイント
 //          (/data/r8/{code}.json)に全面切替。新形式は「大雨」「土砂災害」「強風」「波浪」等の
@@ -1427,8 +1424,7 @@ async function captureScreen() {
 
   showToast("画面キャプチャを生成中...");
 
-  // 注意報セクションがhiddenになっているとhtml2canvasに拾われないため、
-  // キャプチャ中だけ一時的に可視化する
+  // 注意報セクションがhiddenだとhtml2canvasに拾われないため、撮影中だけ一時的に可視化する
   const warningBoxes = ["wn-warnings-box", "y-warnings-box", "t-warnings-box"];
   const wasHidden = warningBoxes.map(id => {
     const el = document.getElementById(id);
@@ -1438,73 +1434,63 @@ async function captureScreen() {
   wasHidden.forEach(({ el }) => { if (el) el.classList.remove("hidden"); });
 
   try {
-    const target = document.getElementById("capture-target");
-
-    // html2canvas のオプション
-    const options = {
-      backgroundColor: "#080b11",
-      useCORS: true,
-      scale: 2,
-      logging: false,
-    };
-
-    const canvas = await html2canvas(target, options);
-
-    // 画像にオーバーレイ情報を描画する
-    const ctx = canvas.getContext("2d");
-    const cw = canvas.width;
-    const ch = canvas.height;
+    const options = { backgroundColor: "#080b11", useCORS: true, scale: 2, logging: false };
     const pad = (n) => String(n).padStart(2, "0");
 
-    // 取得時間（lastFetchTime）を使用。未取得の場合は現在時刻
+    // location-indicator(場所名・更新時刻) / capture-target(3カード) / footer の
+    // 3要素を個別にキャプチャして縦に1枚に合成する
+    const locEl  = document.getElementById("location-indicator");
+    const mainEl = document.getElementById("capture-target");
+    const footEl = document.getElementById("capture-footer");
+
+    const [locCanvas, mainCanvas, footCanvas] = await Promise.all([
+      html2canvas(locEl,  options),
+      html2canvas(mainEl, options),
+      html2canvas(footEl, options),
+    ]);
+
+    const totalH = locCanvas.height + mainCanvas.height + footCanvas.height;
+    const w = mainCanvas.width; // 最も広いmainに合わせる
+
+    const combined = document.createElement("canvas");
+    combined.width  = w;
+    combined.height = totalH;
+    const ctx = combined.getContext("2d");
+    ctx.fillStyle = "#080b11";
+    ctx.fillRect(0, 0, w, totalH);
+
+    // 場所名部分: mainの幅に合わせて横伸縮して描画
+    ctx.drawImage(locCanvas,  0, 0, w, locCanvas.height);
+    ctx.drawImage(mainCanvas, 0, locCanvas.height);
+    ctx.drawImage(footCanvas, 0, locCanvas.height + mainCanvas.height, w, footCanvas.height);
+
+    // 右上に「更新:hh:mm」のオーバーレイを追加
     const fetchTime = lastFetchTime || new Date();
     const timeLabel = `更新:${pad(fetchTime.getHours())}:${pad(fetchTime.getMinutes())}`;
-    const dateLabel = `${pad(fetchTime.getMonth() + 1)}/${pad(fetchTime.getDate())}`;
-
-    const baseFontSize = Math.round(cw * 0.02);
-    const smallFontSize = Math.round(baseFontSize * 0.85);
+    const baseFontSize = Math.round(w * 0.018);
     const padding = Math.round(baseFontSize * 0.6);
-
-    // ① 右上：取得時間（更新:hh:mm）
     ctx.font = `bold ${baseFontSize}px 'Arial', sans-serif`;
     ctx.textAlign = "right";
     const timeW = ctx.measureText(timeLabel).width;
-    const timeBoxW = timeW + padding * 2;
-    const timeBoxH = baseFontSize + padding * 1.2;
-    const timeBoxX = cw - timeBoxW - padding * 0.5;
-    const timeBoxY = padding * 0.5;
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    const boxW = timeW + padding * 2;
+    const boxH = baseFontSize + padding * 1.2;
+    const boxX = w - boxW - padding * 0.5;
+    const boxY = padding * 0.5;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
     ctx.beginPath();
-    ctx.roundRect(timeBoxX, timeBoxY, timeBoxW, timeBoxH, baseFontSize * 0.35);
+    ctx.roundRect(boxX, boxY, boxW, boxH, baseFontSize * 0.35);
     ctx.fill();
     ctx.fillStyle = "#00e5ff";
-    ctx.fillText(timeLabel, cw - padding * 1.2, timeBoxY + timeBoxH - padding * 0.65);
-
-    // ② 左上：場所名 + (MM/DD)
-    // html2canvasでキャプチャ対象は<main id="capture-target">だが、
-    // 場所名は<section>内にあり含まれていないため、画像左上に自前で描画する
-    const locationLabel = `${currentPlaceName}  (${dateLabel})`;
-    ctx.font = `bold ${baseFontSize}px 'Arial', sans-serif`;
-    ctx.textAlign = "left";
-    const locW = ctx.measureText(locationLabel).width;
-    const locBoxW = locW + padding * 2;
-    const locBoxH = baseFontSize + padding * 1.2;
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.beginPath();
-    ctx.roundRect(padding * 0.5, timeBoxY, locBoxW, locBoxH, baseFontSize * 0.35);
-    ctx.fill();
-    ctx.fillStyle = "#00e5ff";
-    ctx.textAlign = "left";
-    ctx.fillText(locationLabel, padding * 1.2, timeBoxY + locBoxH - padding * 0.65);
+    ctx.fillText(timeLabel, w - padding * 1.2, boxY + boxH - padding * 0.65);
 
     // 画像ダウンロード
     const now = new Date();
     const link = document.createElement("a");
     const safePlace = currentPlaceName.replace(/[\s\(\)]/g, "_");
-    const dateTimeStr = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const dateTimeStr = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const fileName = `weather_comparison_${safePlace}_${dateTimeStr}.png`;
     link.download = fileName;
-    link.href = canvas.toDataURL("image/png");
+    link.href = combined.toDataURL("image/png");
     link.click();
 
     showToastWithAction(

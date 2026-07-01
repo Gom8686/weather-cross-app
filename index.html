@@ -100,15 +100,14 @@
       </div>
     </section>
 
-    <!-- Main Comparison Grid (location-indicatorもここに含め、画面保存でキャプチャ対象にする) -->
+    <!-- Location Indicator (mainの外に戻す。画面保存時はJS側でwrapperごとキャプチャする) -->
+    <div class="location-indicator" id="location-indicator">
+      <h2 id="current-location-name"><i class="fa-solid fa-street-view"></i> 東京都千代田区</h2>
+      <span class="last-update" id="last-update-time">更新:--:--</span>
+    </div>
+
+    <!-- Main Comparison Grid -->
     <main class="comparison-grid" id="capture-target">
-
-      <!-- Location Indicator (capture-target内に移動) -->
-      <div class="location-indicator location-indicator--in-grid">
-        <h2 id="current-location-name"><i class="fa-solid fa-street-view"></i> 東京都千代田区</h2>
-        <span class="last-update" id="last-update-time">更新:--:--</span>
-      </div>
-
       <!-- Weathernews Card -->
       <article class="weather-card glass" id="card-weathernews">
         <div class="card-header wn-theme">
@@ -246,12 +245,12 @@
           </div>
         </div>
       </article>
-
-      <!-- フッター: 画面保存・印刷に含めるため capture-target 内に配置 -->
-      <footer class="app-footer">
-        <span class="footer-copyright">&copy; 2026 M.Koo &nbsp; All rights reserved.</span>
-      </footer>
     </main>
+
+    <!-- フッター: 画面保存・印刷に含めるため capture-wrapper 内に配置 -->
+    <footer class="app-footer" id="capture-footer">
+      <span class="footer-copyright">&copy; 2026 M.Koo &nbsp; All rights reserved.</span>
+    </footer>
 
     <!-- Radar Modal (別画面扱い) -->
     <div class="modal" id="radar-modal">
